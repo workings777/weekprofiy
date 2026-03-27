@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VIBE 채산성 관리</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/10.9.0/jsrsasign-all-min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Segoe UI', -apple-system, sans-serif;
+  background: #F1F4F9;
+  color: #1E293B;
+  min-height: 100vh;
+}
+
+#app {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 20px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 28px;
+}
+
+header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1E293B;
+  letter-spacing: -0.3px;
+}
+
+.sheet-link {
+  font-size: 11px;
+  color: #94A3B8;
+  text-decoration: none;
+  margin-top: 4px;
+  display: block;
+  transition: color 0.15s;
+}
+.sheet-link:hover { color: #7C3AED; }
+
+#status {
+  font-size: 12px;
+  color: #64748B;
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: 1px solid #E2E8F0;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+#status.loading { color: #7C3AED; border-color: #DDD6FE; background: #F5F3FF; }
+#status.success { color: #10B981; border-color: #A7F3D0; background: #ECFDF5; }
+#status.error   { color: #EF4444; border-color: #FECACA; background: #FEF2F2; }
+
+.week-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.week-nav button {
+  background: white;
+  border: 1px solid #E2E8F0;
+  color: #64748B;
+  padding: 8px 20px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.15s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+.week-nav button:hover {
+  background: #7C3AED;
+  color: white;
+  border-color: #7C3AED;
+  box-shadow: 0 4px 12px rgba(124,58,237,0.25);
+}
+
+#weekLabel {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1E293B;
+  min-width: 260px;
+  text-align: center;
+}
+
+.dashboard {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.col-card {
+  background: white;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+
+.col-header {
+  padding: 14px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.2px;
+}
+
+.col-target .col-header { background: #EFF6FF; color: #3B82F6; border-bottom: 2px solid #DBEAFE; }
+.col-actual .col-header { background: #F0FDF4; color: #10B981; border-bottom: 2px solid #D1FAE5; }
+.col-next   .col-header { background: #FFF7ED; color: #F59E0B; border-bottom: 2px solid #FED7AA; }
+
+.col-body { padding: 16px; }
+
+.sec-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #CBD5E1;
+  margin: 14px 0 7px;
+}
+.sec-title:first-child { margin-top: 0; }
+
+.field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  gap: 8px;
+}
+
+.field-label {
+  font-size: 12px;
+  color: #64748B;
+  white-space: nowrap;
+}
+
+.field-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.field-input {
+  width: 100px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  color: #1E293B;
+  font-size: 13px;
+  padding: 5px 9px;
+  text-align: right;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.field-input:focus {
+  outline: none;
+  border-color: #7C3AED;
+  box-shadow: 0 0 0 3px rgba(124,58,237,0.08);
+  background: white;
+}
+
+/* 자동계산 필드 */
+.field-input.calc {
+  background: #EFF6FF;
+  color: #3B82F6;
+  border-color: #DBEAFE;
+  cursor: default;
+  font-weight: 600;
+}
+.col-actual .field-input.calc { color: #10B981; border-color: #D1FAE5; background: #F0FDF4; }
+.col-next   .field-input.calc { color: #F59E0B; border-color: #FED7AA; background: #FFF7ED; }
+
+/* 배지 */
+.badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.badge-auto  { background: #DBEAFE; color: #3B82F6; }
+.badge-carry { background: #D1FAE5; color: #10B981; font-size: 8px; }
+
+.unit { font-size: 10px; color: #CBD5E1; width: 24px; text-align: left; }
+
+.divider { border: none; border-top: 1px solid #F1F5F9; margin: 10px 0; }
+
+.pph-box {
+  background: linear-gradient(135deg, #3B82F6 0%, #6366F1 100%);
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
+  margin-top: 10px;
+  box-shadow: 0 4px 14px rgba(99,102,241,0.25);
+}
+.col-actual .pph-box { background: linear-gradient(135deg, #10B981 0%, #059669 100%); box-shadow: 0 4px 14px rgba(16,185,129,0.25); }
+.col-next   .pph-box { background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); box-shadow: 0 4px 14px rgba(245,158,11,0.25); }
+.pph-label { font-size: 10px; color: rgba(255,255,255,0.75); margin-bottom: 5px; letter-spacing: 0.05em; }
+.pph-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: white;
+  letter-spacing: -0.5px;
+}
+.pph-unit { font-size: 11px; color: rgba(255,255,255,0.65); margin-top: 2px; }
+
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.btn {
+  padding: 12px 36px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+}
+.btn-primary { background: #7C3AED; color: white; box-shadow: 0 4px 12px rgba(124,58,237,0.3); }
+.btn-primary:hover { background: #6D28D9; box-shadow: 0 6px 18px rgba(124,58,237,0.4); transform: translateY(-1px); }
+.btn-secondary { background: white; color: #64748B; border: 1px solid #E2E8F0; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+.btn-secondary:hover { background: #F8FAFC; color: #1E293B; }
+
+/* 비율 설정 패널 */
+.rates-bar {
+  margin-bottom: 20px;
+  background: white;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+.rates-toggle {
+  width: 100%;
+  background: none;
+  border: none;
+  color: #94A3B8;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 11px 18px;
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 0.15s;
+  letter-spacing: 0.04em;
+}
+.rates-toggle:hover { color: #64748B; }
+.rates-panel {
+  padding: 14px 18px 18px;
+  border-top: 1px solid #F1F5F9;
+}
+.rates-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+.rates-table th {
+  color: #94A3B8;
+  font-weight: 600;
+  padding: 0 8px 8px;
+  text-align: center;
+  font-size: 11px;
+}
+.rates-table th:first-child { text-align: left; width: 110px; }
+.rates-table td { padding: 4px 8px; text-align: center; }
+.rates-table td:first-child { color: #64748B; text-align: left; font-size: 11px; }
+.rate-input {
+  width: 72px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 7px;
+  color: #1E293B;
+  font-size: 12px;
+  padding: 5px 7px;
+  text-align: right;
+  transition: border-color 0.15s;
+}
+.rate-input:focus { outline: none; border-color: #7C3AED; box-shadow: 0 0 0 3px rgba(124,58,237,0.08); }
+.rate-unit { font-size: 10px; color: #CBD5E1; margin-left: 2px; }
+.btn-sm {
+  background: #7C3AED;
+  color: white;
+  border: none;
+  padding: 7px 18px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  float: right;
+  box-shadow: 0 2px 8px rgba(124,58,237,0.3);
+}
+.btn-sm:hover { background: #6D28D9; }
+
+.btn-sheets {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: white;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  color: #10B981;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn-sheets:hover {
+  background: #ECFDF5;
+  border-color: #A7F3D0;
+  box-shadow: 0 2px 8px rgba(16,185,129,0.15);
+}
+
+.upload-label {
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+  line-height: 1;
+}
+.upload-label:hover { opacity: 1; }
+
+/* Chrome number input 화살표 제거 */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+input[type=number] { -moz-appearance: textfield; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>VIBE 채산성</h1>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div id="status" class="loading">초기화 중...</div>
+      <a href="https://docs.google.com/spreadsheets/d/1gwxAe3RMLaa1rROeWSk0yBAnxdumAkh6J-du65zzcoI/edit" target="_blank" class="btn-sheets">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+        Google Sheets
+      </a>
+    </div>
+  </header>
+
+  <div class="week-nav">
+    <button id="prevWeek">← 이전</button>
+    <div id="weekLabel">—</div>
+    <button id="nextWeek">다음 →</button>
+  </div>
+
+  <!-- 비율 설정 -->
+  <div class="rates-bar">
+    <button class="rates-toggle" id="ratesToggle">⚙ 채널별 비율 설정 ▾</button>
+    <div class="rates-panel" id="ratesPanel" style="display:none">
+      <table class="rates-table">
+        <thead>
+          <tr><th></th><th>옴채운</th><th>외채운</th><th>사업개발</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>원가율</td>
+            <td><input type="number" class="rate-input" id="r_om_cogs"  step="0.01" min="0" max="100"><span class="rate-unit">%</span></td>
+            <td><input type="number" class="rate-input" id="r_oe_cogs"  step="0.01" min="0" max="100"><span class="rate-unit">%</span></td>
+            <td><input type="number" class="rate-input" id="r_biz_cogs" step="0.01" min="0" max="100"><span class="rate-unit">%</span></td>
+          </tr>
+          <tr>
+            <td>물류비율</td>
+            <td><input type="number" class="rate-input" id="r_om_logi"  step="0.01" min="0" max="100"><span class="rate-unit">%</span></td>
+            <td><input type="number" class="rate-input" id="r_oe_logi"  step="0.01" min="0" max="100"><span class="rate-unit">%</span></td>
+            <td><input type="number" class="rate-input" id="r_biz_logi" step="0.01" min="0" max="100"><span class="rate-unit">%</span></td>
+          </tr>
+          <tr>
+            <td>판매수수료율</td>
+            <td><input type="number" class="rate-input" id="r_om_comm"  step="0.01" min="0" max="100"><span class="rate-unit">%</span></td>
+            <td><input type="number" class="rate-input" id="r_oe_comm"  step="0.01" min="0" max="100"><span class="rate-unit">%</span></td>
+            <td><input type="number" class="rate-input" id="r_biz_comm" step="0.01" min="0" max="100"><span class="rate-unit">%</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <button class="btn-sm" id="saveRatesBtn">저장</button>
+      <div style="clear:both"></div>
+    </div>
+  </div>
+
+  <div class="dashboard">
+    <div class="col-card col-target">
+      <div class="col-header">금주 목표</div>
+      <div class="col-body" id="body-target"></div>
+    </div>
+    <div class="col-card col-actual">
+      <div class="col-header" style="display:flex;align-items:center;justify-content:center;gap:8px;">
+        금주 실적
+        <label for="xlsxUpload" class="upload-label" title="xlsx 업로드">📂</label>
+        <input type="file" id="xlsxUpload" accept=".xlsx,.xls" style="display:none">
+      </div>
+      <div class="col-body" id="body-actual"></div>
+    </div>
+    <div class="col-card col-next">
+      <div class="col-header">익주 목표</div>
+      <div class="col-body" id="body-next"></div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-primary" id="saveBtn">저장하기</button>
+    <button class="btn btn-secondary" id="exportBtn">엑셀 다운로드</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+const CFG = {
+  clientEmail: "id-818@molten-sandbox-490023-t0.iam.gserviceaccount.com",
+  privateKey: `-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDzqrlHRIE7ER/O
+poHOoAtsg9N9XnyAJu7BKC+kSw/D+ovOHytFVYnL0PuEn/6ey9Cuklkog0dF32xs
+XS5wmALq5TMX8n3zmJkTuZ655/R6Dvm99MIlYODBAO0X/bdfh88MklGNXQpF5ejI
+H8aLG6d/jlaOCn2NmBCZOXqpNjrbVDJ9Q/HR+JTW+N21fBz2OGWinjckqjCOdTCX
+6rZF7VX29SccC4FRIf9LuPMvj0SaMQWkeMIcky0vM1K8nLPDT0+wmN8sg5k9TJvm
+Jvtj8hX9j9eJtxmeyOSWgtCIRe8m3K4TG6KnYJHHgP7bbVAN70qTMmgjb+fcqvcp
+Zn3R7otDAgMBAAECggEAadLfBa8gSvVccYTKAmFqpLW574xOGOAPuA7KZhl9Xtlc
+x2etBL8qCb0YxxgvXmrZFkAT/a7KEPQAJC3x4c97EOX64y8a+WTwMmtenpG5ERuY
+5iE7Aj3JTrkmv1Eexxv11ZlkVrcuI34+s09tjHO1soWwXJ78uTZuGwWmGoAlXqQh
+Gndptkfm6WZGbs70Ha8FzHduaCYXHWj0qk9cjDMM87hFpWoT+KJtoNToSu3znAoE
+cbE9YU4w09OPNDW110ojzoA2kOH2E5lUKqUW8/X0JUza4qvwSnivVrhNQ0GLhU2D
+vFy1flXSMl6LR8JUOlLiustYeyVmQXNDgQkSiUCobQKBgQD6BHhwRLDeKg+dcLqu
+kB/f8EauvKzTOSO8LpNnSuQXF9nB4vZ0yIxSLVdgxHPz43zrS2HNubjvqPuDxs9n
+DZx8Fn9Q4NA2FXXHCNP8FbCG67Ve/c008XXl6H62JPNaVVV5HgubseC8cNkkNV7W
+dkh28MCQwAJLPxg72nYMpr0C1QKBgQD5f1oE3L5gxdLaLsCIUbILxAEwVDKiqUij
+wCPk2PE/WauSEkLG5v6AmV5mfLu6ZY0oZSv921JG5WxwMaMiSu1v3zrSFI+c5yYK
+tYf6Ltgohy3uhj+y+truiAcCJdkshH3iSZCAwBIH4C5DcDvVUuOouuwGvSkpX36R
+H1hiSgvxtwKBgDRsp4xy+ts62pdawepEkkp0qX2OVnbb7mBRK9tm2rj06VY8bw1B
+2BqLI11JFD85nkIARnvKy7qFJmgVUfv74KosVXnyCfatPUsE0N509dT0q81FTrgh
+QWV6AMfUq6pvZkLFSA3XmJYq2306K66wkrVN+jLf8BszGbPDNSml9NAZAoGBAM7n
+svJnUaYVSAfST658+YdSU54NpTRJ6MiLlfi5hE+CAIuRgzlJ5PMmvSeG93PbtZUz
+WakbUf8jUas1LtFIi+GDoVcI4BRBiMXGx25NnMr3V7sAMCEwcZDw08cPNiv58B9R
+3Hk5T3qiihs5HxWIuO17njL0egcqf17APN6+A2u/AoGAaHd95k6wUZPw+8PCQ8xK
+t9eUcnxuTOYMx5b1V2+0Rhx6v3Cyl/zQOZ4WyGCGc8FzrQfUKMeCA4Kri+LUwtUJ
+zn1eQe4ZVG0XSzW+R8N0EcCfuwl6ZyuG8w6DA0oh1Nc6ZWCrfZMALltWQ7AjgMpS
+lEraPAU96a4Zg4AMANJZRs0=
+-----END PRIVATE KEY-----`,
+  tokenUri: "https://oauth2.googleapis.com/token",
+  spreadsheetId: "1gwxAe3RMLaa1rROeWSk0yBAnxdumAkh6J-du65zzcoI",
+  sheetName: "Data_Sheet",
+  scope: "https://www.googleapis.com/auth/spreadsheets"
+};
+
+const HEADERS = ["week_key","type","om","oe","biz","cogs","variable","fixed","other","hours","updated_at"];
+
+// ============================================================
+// STATE
+// ============================================================
+let _token = null;
+let _tokenExp = 0;
+let _allRows = [];
+let _currentWeek = null;
+
+// 채널별 비율 (%, localStorage 저장)
+const RATE_KEYS = ['om_cogs','oe_cogs','biz_cogs','om_logi','oe_logi','biz_logi','om_comm','oe_comm','biz_comm'];
+
+// xlsx 채널 매핑
+const CH_MAP = {
+  om:  ['광주권역','남부권역(A)','남부권역(B)','대구권역','대리점기타','대전권역',
+         '동부권역(A)','동부권역(B)','매장운영사업소','부산권역','북동권역',
+         '북서권역','서부권역','자사몰사업소','중부권역'],
+  oe:  ['온라인'],
+  biz: ['사업개발B','폐쇄몰사업소']
+};
+let _rates = {};
+
+function loadRates() {
+  const saved = localStorage.getItem('vibe_rates');
+  _rates = saved ? JSON.parse(saved) : {};
+  RATE_KEYS.forEach(k => { if (_rates[k] == null) _rates[k] = 0; });
+}
+
+function applyRatesToUI() {
+  RATE_KEYS.forEach(k => {
+    const el = document.getElementById(`r_${k}`);
+    if (el) el.value = _rates[k];
+  });
+}
+
+function saveRates() {
+  RATE_KEYS.forEach(k => {
+    const el = document.getElementById(`r_${k}`);
+    if (el) _rates[k] = parseFloat(el.value) || 0;
+  });
+  localStorage.setItem('vibe_rates', JSON.stringify(_rates));
+  if (_currentWeek) displayWeek(_currentWeek);
+}
+
+function calcCogs(om, oe, biz) {
+  return om  * (_rates.om_cogs  / 100)
+       + oe  * (_rates.oe_cogs  / 100)
+       + biz * (_rates.biz_cogs / 100);
+}
+
+function calcVariable(om, oe, biz) {
+  const logistics  = om  * (_rates.om_logi  / 100)
+                   + oe  * (_rates.oe_logi  / 100)
+                   + biz * (_rates.biz_logi / 100);
+  const commission = om  * (_rates.om_comm  / 100)
+                   + oe  * (_rates.oe_comm  / 100)
+                   + biz * (_rates.biz_comm / 100);
+  return { logistics, commission, variable: logistics + commission };
+}
+
+// ============================================================
+// WEEK UTILITIES
+// ============================================================
+function getWeekKey(date) {
+  const d = new Date(date);
+  const thu = new Date(d);
+  thu.setDate(d.getDate() + (4 - (d.getDay() || 7)));
+  const year = thu.getFullYear();
+  const jan1 = new Date(year, 0, 1);
+  const week = Math.ceil((((thu - jan1) / 86400000) + jan1.getDay() + 1) / 7);
+  return `${year}-W${String(week).padStart(2, '0')}`;
+}
+
+function getWeekDates(weekKey) {
+  const [y, w] = weekKey.split('-W').map(Number);
+  const jan4 = new Date(y, 0, 4);
+  const mon1 = new Date(jan4);
+  mon1.setDate(jan4.getDate() - (jan4.getDay() + 6) % 7);
+  const mon = new Date(mon1);
+  mon.setDate(mon1.getDate() + (w - 1) * 7);
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  return { mon, sun };
+}
+
+function weekLabel(weekKey) {
+  const [y, w] = weekKey.split('-W').map(Number);
+  const { mon, sun } = getWeekDates(weekKey);
+  const fmt = d => `${d.getMonth()+1}/${d.getDate()}`;
+  return `${y}년 ${w}주차 (${fmt(mon)} ~ ${fmt(sun)})`;
+}
+
+function addWeeks(weekKey, n) {
+  const { mon } = getWeekDates(weekKey);
+  mon.setDate(mon.getDate() + n * 7);
+  return getWeekKey(mon);
+}
+
+// ============================================================
+// AUTH
+// ============================================================
+async function getToken() {
+  if (_token && Date.now() < _tokenExp - 60000) return _token;
+
+  const now = Math.floor(Date.now() / 1000);
+  const jwt = KJUR.jws.JWS.sign(
+    "RS256",
+    JSON.stringify({ alg: "RS256", typ: "JWT" }),
+    JSON.stringify({ iss: CFG.clientEmail, scope: CFG.scope, aud: CFG.tokenUri, exp: now + 3600, iat: now }),
+    CFG.privateKey
+  );
+
+  const res = await fetch(CFG.tokenUri, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`
+  });
+  const data = await res.json();
+  if (!data.access_token) throw new Error("인증 실패: " + JSON.stringify(data));
+
+  _token = data.access_token;
+  _tokenExp = Date.now() + data.expires_in * 1000;
+  return _token;
+}
+
+// ============================================================
+// SHEETS API
+// ============================================================
+async function sheetsGet(range) {
+  const token = await getToken();
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CFG.spreadsheetId}/values/${encodeURIComponent(range)}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`시트 읽기 실패 (${res.status})`);
+  return res.json();
+}
+
+async function sheetsUpdate(range, values) {
+  const token = await getToken();
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CFG.spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`;
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ range, majorDimension: "ROWS", values })
+  });
+  if (!res.ok) throw new Error(`시트 업데이트 실패 (${res.status})`);
+  return res.json();
+}
+
+async function sheetsAppend(values) {
+  const token = await getToken();
+  const range = `${CFG.sheetName}!A:K`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CFG.spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ range, majorDimension: "ROWS", values })
+  });
+  if (!res.ok) throw new Error(`시트 추가 실패 (${res.status})`);
+  return res.json();
+}
+
+async function initSheet() {
+  try {
+    const result = await sheetsGet(`${CFG.sheetName}!A1:A1`);
+    const hasHeader = result.values?.[0]?.[0] === 'week_key';
+    if (!hasHeader) {
+      await sheetsUpdate(`${CFG.sheetName}!A1:K1`, [HEADERS]);
+    }
+  } catch (e) {
+    // 시트 없으면 생성
+    const token = await getToken();
+    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CFG.spreadsheetId}:batchUpdate`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ requests: [{ addSheet: { properties: { title: CFG.sheetName } } }] })
+    });
+    if (!res.ok) throw new Error("Data_Sheet 생성 실패");
+    await sheetsUpdate(`${CFG.sheetName}!A1:K1`, [HEADERS]);
+  }
+}
+
+// ============================================================
+// DATA
+// ============================================================
+function parseRow(row, idx) {
+  return {
+    _rowIdx: idx + 2, // 1-based sheet row (header=1, data starts at 2)
+    weekKey:  row[0] || '',
+    type:     row[1] || '',
+    om:       parseFloat(row[2]) || 0,
+    oe:       parseFloat(row[3]) || 0,
+    biz:      parseFloat(row[4]) || 0,
+    cogs:     parseFloat(row[5]) || 0,
+    variable: parseFloat(row[6]) || 0,
+    fixed:    parseFloat(row[7]) || 0,
+    other:    parseFloat(row[8]) || 0,
+    hours:    parseFloat(row[9]) || 0,
+  };
+}
+
+async function loadAllData() {
+  const result = await sheetsGet(`${CFG.sheetName}!A:K`);
+  const rows = result.values || [];
+  const dataRows = (rows[0]?.[0] === 'week_key') ? rows.slice(1) : rows;
+  _allRows = dataRows.filter(r => r[0]).map((r, i) => parseRow(r, i));
+}
+
+function getRecord(weekKey, type) {
+  return _allRows.find(r => r.weekKey === weekKey && r.type === type) || null;
+}
+
+function getLastFixedCost(beforeWeekKey) {
+  return _allRows
+    .filter(r => r.weekKey < beforeWeekKey && r.fixed > 0)
+    .sort((a, b) => b.weekKey.localeCompare(a.weekKey))[0]?.fixed || 0;
+}
+
+function getLastOther(beforeWeekKey) {
+  return _allRows
+    .filter(r => r.weekKey < beforeWeekKey && r.other !== 0)
+    .sort((a, b) => b.weekKey.localeCompare(a.weekKey))[0]?.other || 0;
+}
+
+function getAvgCogsRate() {
+  const valid = _allRows
+    .filter(r => (r.om + r.oe + r.biz) > 0 && r.cogs > 0)
+    .sort((a, b) => b.weekKey.localeCompare(a.weekKey) || b.type.localeCompare(a.type))
+    .slice(0, 4);
+  if (!valid.length) return 0.5;
+  return valid.reduce((s, r) => s + r.cogs / (r.om + r.oe + r.biz), 0) / valid.length;
+}
+
+// ============================================================
+// UI
+// ============================================================
+function fv(val, d = 2) {
+  if (val === null || val === undefined || val === '') return '';
+  const n = parseFloat(val);
+  return isNaN(n) ? '' : n.toFixed(d);
+}
+
+function field(id, label, value, isCalc, badge) {
+  const badgeHtml = badge ? `<span class="badge badge-${badge === 'AUTO' ? 'auto' : 'carry'}">${badge}</span>` : '';
+  return `
+    <div class="field-row">
+      <span class="field-label">${label}${badgeHtml}</span>
+      <div class="field-right">
+        <input type="number" id="${id}" class="field-input${isCalc ? ' calc' : ''}"
+               value="${value}" ${isCalc ? 'readonly' : ''} step="0.01">
+        <span class="unit">백만</span>
+      </div>
+    </div>`;
+}
+
+function fieldHours(id, label, value) {
+  return `
+    <div class="field-row">
+      <span class="field-label">${label}</span>
+      <div class="field-right">
+        <input type="number" id="${id}" class="field-input" value="${value}" step="1">
+        <span class="unit">h</span>
+      </div>
+    </div>`;
+}
+
+function renderColumn(bodyId, p, rec, prevFixed, prevOther) {
+  const isNext = (p === 'next');
+  const om    = rec ? rec.om    : 0;
+  const oe    = rec ? rec.oe    : 0;
+  const biz   = rec ? rec.biz   : 0;
+  const cogs  = rec ? rec.cogs  : 0;
+  const fixed = rec ? rec.fixed : prevFixed;
+  const other = rec ? rec.other : prevOther;
+  const hours = rec ? rec.hours : 0;
+
+  const total    = om + oe + biz;
+  const isActual = (p === 'actual');
+  const dispCogs = isActual ? (rec ? rec.cogs : 0) : calcCogs(om, oe, biz);
+  const { logistics, commission, variable } = calcVariable(om, oe, biz);
+  const contrib  = total - dispCogs - variable;
+  const profit   = contrib - fixed + other;
+  const perHour  = hours > 0 ? Math.round(profit / hours * 1000000) : null;
+  const showCarry      = !rec && prevFixed > 0;
+  const showCarryOther = !rec && prevOther !== 0;
+
+  document.getElementById(bodyId).innerHTML = `
+    <div class="sec-title">매출</div>
+    ${field(`${p}_om`,  '옴채운',   fv(om),  false)}
+    ${field(`${p}_oe`,  '외채운',   fv(oe),  false)}
+    ${field(`${p}_biz`, '사업개발', fv(biz), false)}
+    ${field(`${p}_total`, '총매출', fv(total), true)}
+    <hr class="divider">
+    <div class="sec-title">원가 / 비용</div>
+    ${field(`${p}_cogs`, '매출원가', fv(dispCogs), !isActual, !isActual ? 'AUTO' : null)}
+    ${field(`${p}_logistics`,  '물류비',     fv(logistics), true, 'AUTO')}
+    ${field(`${p}_commission`, '판매수수료', fv(commission),true, 'AUTO')}
+    ${field(`${p}_variable`,   '변동비 계',  fv(variable),  true)}
+    ${field(`${p}_contrib`,    '공헌이익',   fv(contrib),   true)}
+    <hr class="divider">
+    ${field(`${p}_fixed`, '고정비',     fv(fixed), false, showCarry      ? '승계' : null)}
+    ${field(`${p}_other`, '영업외손익', fv(other), false, showCarryOther ? '승계' : null)}
+    ${field(`${p}_profit`, '채산이익',  fv(profit), true)}
+    <hr class="divider">
+    <div class="sec-title">근무</div>
+    ${fieldHours(`${p}_hours`, '근무시간', fv(hours, 0))}
+    <div class="pph-box">
+      <div class="pph-label">시간당 채산이익</div>
+      <div class="pph-value" id="${p}_pph">${perHour !== null ? perHour.toLocaleString() : '—'}</div>
+      <div class="pph-unit">원</div>
+    </div>`;
+
+  const listenKeys = isActual
+    ? ['om','oe','biz','cogs','fixed','other','hours']
+    : ['om','oe','biz','fixed','other','hours'];
+  listenKeys.forEach(k => {
+    const el = document.getElementById(`${p}_${k}`);
+    if (el) el.addEventListener('input', () => recalc(p, isNext));
+  });
+}
+
+function recalc(p, isNext) {
+  const v = k => parseFloat(document.getElementById(`${p}_${k}`)?.value) || 0;
+  const set = (k, val) => { const el = document.getElementById(`${p}_${k}`); if (el) el.value = fv(val); };
+
+  const om = v('om'), oe = v('oe'), biz = v('biz');
+  const total = om + oe + biz;
+
+  const cogs = (p === 'actual') ? v('cogs') : calcCogs(om, oe, biz);
+  if (p !== 'actual') set('cogs', cogs);
+
+  const { logistics, commission, variable } = calcVariable(om, oe, biz);
+  set('logistics',  logistics);
+  set('commission', commission);
+  set('variable',   variable);
+
+  const contrib = total - cogs - variable;
+  const profit  = contrib - v('fixed') + v('other');
+  const hours   = v('hours');
+  const perHour = hours > 0 ? Math.round(profit / hours * 1000000) : null;
+
+  set('total',   total);
+  set('contrib', contrib);
+  set('profit',  profit);
+
+  const pphEl = document.getElementById(`${p}_pph`);
+  if (pphEl) pphEl.textContent = perHour !== null ? perHour.toLocaleString() : '—';
+}
+
+function getColData(p) {
+  const v = k => parseFloat(document.getElementById(`${p}_${k}`)?.value) || 0;
+  const om = v('om'), oe = v('oe'), biz = v('biz');
+  const { variable } = calcVariable(om, oe, biz);
+  return { om, oe, biz, cogs: v('cogs'), variable,
+           fixed: v('fixed'), other: v('other'), hours: v('hours') };
+}
+
+// ============================================================
+// DISPLAY
+// ============================================================
+function displayWeek(weekKey) {
+  _currentWeek = weekKey;
+  document.getElementById('weekLabel').textContent = weekLabel(weekKey);
+
+  const nextWeek  = addWeeks(weekKey, 1);
+  const prevFixed = getLastFixedCost(weekKey);
+  const prevOther = getLastOther(weekKey);
+
+  const target     = getRecord(weekKey, 'target');
+  const actual     = getRecord(weekKey, 'actual');
+  const nextTarget = getRecord(nextWeek, 'target');
+
+  const nextPrevFixed = target?.fixed ?? actual?.fixed ?? prevFixed;
+  const nextPrevOther = actual?.other ?? target?.other ?? prevOther;
+
+  renderColumn('body-target', 'target', target,     prevFixed, prevOther);
+  renderColumn('body-actual', 'actual', actual,     prevFixed, target?.other ?? prevOther);
+  renderColumn('body-next',   'next',   nextTarget, nextPrevFixed, nextPrevOther);
+}
+
+// ============================================================
+// SAVE
+// ============================================================
+async function saveRecord(weekKey, type, data) {
+  const row = [weekKey, type,
+    data.om, data.oe, data.biz, data.cogs, data.variable,
+    data.fixed, data.other, data.hours,
+    new Date().toISOString()
+  ];
+
+  const existing = _allRows.find(r => r.weekKey === weekKey && r.type === type);
+
+  if (existing) {
+    await sheetsUpdate(`${CFG.sheetName}!A${existing._rowIdx}:K${existing._rowIdx}`, [row]);
+    Object.assign(existing, { ...data });
+  } else {
+    await sheetsAppend([row]);
+    const newIdx = _allRows.length;
+    _allRows.push({ _rowIdx: newIdx + 2, weekKey, type, ...data });
+  }
+}
+
+async function saveAll() {
+  setStatus('저장 중...', 'loading');
+  try {
+    const nextWeek = addWeeks(_currentWeek, 1);
+    await saveRecord(_currentWeek, 'target', getColData('target'));
+    await saveRecord(_currentWeek, 'actual', getColData('actual'));
+    await saveRecord(nextWeek,     'target', getColData('next'));
+    setStatus('저장 완료 ✓', 'success');
+    setTimeout(() => setStatus('', ''), 3000);
+  } catch (e) {
+    setStatus('저장 실패: ' + e.message, 'error');
+    console.error(e);
+  }
+}
+
+// ============================================================
+// EXCEL EXPORT
+// ============================================================
+function exportExcel() {
+  function uiCalc(p) {
+    const v = k => parseFloat(document.getElementById(`${p}_${k}`)?.value) || 0;
+    const om = v('om'), oe = v('oe'), biz = v('biz');
+    const total = om + oe + biz;
+    const cogs = v('cogs'), fixed = v('fixed'), other = v('other'), hours = v('hours');
+    const { variable } = calcVariable(om, oe, biz);
+    const contrib = total - cogs - variable;
+    const profit  = contrib - fixed + other;
+    const perHour = hours > 0 ? Math.round(profit / hours * 1000000) : 0;
+    return { total, cogs, variable, contrib, fixed, other, profit, hours, perHour };
+  }
+
+  const d = { target: uiCalc('target'), actual: uiCalc('actual'), next: uiCalc('next') };
+
+  // #,###(##.#%) 형식 — 분모: 총매출
+  function fmt(val, totalRev) {
+    const numStr = Math.round(val).toLocaleString('ko-KR');
+    if (!totalRev) return numStr;
+    const pct = (val / totalRev * 100).toFixed(1);
+    return `${numStr}(${pct}%)`;
+  }
+
+  function dataRow(label, key) {
+    return [
+      label,
+      fmt(d.target[key], d.target.total),
+      fmt(d.actual[key], d.actual.total),
+      fmt(d.next[key],   d.next.total),
+    ];
+  }
+
+  const rows = [
+    [`VIBE 채산성 리포트 - ${weekLabel(_currentWeek)}`],
+    [],
+    ['항목', '금주 목표', '금주 실적', '익주 목표'],
+    dataRow('매출', 'total'),
+    dataRow('매출원가', 'cogs'),
+    dataRow('변동비(원가外)', 'variable'),
+    [],
+    dataRow('공헌이익', 'contrib'),
+    dataRow('고정비', 'fixed'),
+    dataRow('영업외손익', 'other'),
+    [],
+    dataRow('채산이익', 'profit'),
+    ['근무시간(시간)', d.target.hours, d.actual.hours, d.next.hours],
+    [],
+    [
+      '시간당채산이익(원)',
+      d.target.perHour ? d.target.perHour.toLocaleString('ko-KR') : '—',
+      d.actual.perHour ? d.actual.perHour.toLocaleString('ko-KR') : '—',
+      d.next.perHour   ? d.next.perHour.toLocaleString('ko-KR')   : '—',
+    ],
+  ];
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{ wch: 18 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
+  XLSX.utils.book_append_sheet(wb, ws, '주간리포트');
+  XLSX.writeFile(wb, `VIBE_${_currentWeek}.xlsx`);
+}
+
+// ============================================================
+// UTILS
+// ============================================================
+function setStatus(msg, cls) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = cls || '';
+}
+
+// ============================================================
+// INIT
+// ============================================================
+async function init() {
+  loadRates();
+  applyRatesToUI();
+
+  setStatus('구글 시트 연결 중...', 'loading');
+  try {
+    await initSheet();
+    await loadAllData();
+    _currentWeek = getWeekKey(new Date());
+    displayWeek(_currentWeek);
+    setStatus('연결됨', 'success');
+    setTimeout(() => setStatus('', ''), 2000);
+  } catch (e) {
+    setStatus('오류: ' + e.message, 'error');
+    console.error(e);
+  }
+}
+
+// ============================================================
+// XLSX 업로드
+// ============================================================
+function parseXlsxUpload(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const ws = wb.Sheets['pivot'];
+      if (!ws) { setStatus("'pivot' 시트 없음", 'error'); return; }
+
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      const totals = { om: { rev: 0, cogs: 0 }, oe: { rev: 0, cogs: 0 }, biz: { rev: 0, cogs: 0 } };
+
+      for (const row of rows) {
+        const name = String(row[0] || '').trim();
+        const rev  = parseFloat(row[1]) || 0;
+        const cost = parseFloat(row[2]) || 0;
+        for (const [ch, names] of Object.entries(CH_MAP)) {
+          if (names.includes(name)) {
+            totals[ch].rev  += rev;
+            totals[ch].cogs += cost;
+          }
+        }
+      }
+
+      // 원 → 백만원 변환
+      const toM = v => parseFloat((v / 1000000).toFixed(2));
+      const setField = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+
+      setField('actual_om',   toM(totals.om.rev));
+      setField('actual_oe',   toM(totals.oe.rev));
+      setField('actual_biz',  toM(totals.biz.rev));
+      setField('actual_cogs', toM(totals.om.cogs + totals.oe.cogs + totals.biz.cogs));
+      recalc('actual', false);
+
+      setStatus('xlsx 불러오기 완료 ✓', 'success');
+      setTimeout(() => setStatus('', ''), 3000);
+    } catch(err) {
+      setStatus('xlsx 파싱 오류: ' + err.message, 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+document.getElementById('prevWeek').addEventListener('click', () => displayWeek(addWeeks(_currentWeek, -1)));
+document.getElementById('nextWeek').addEventListener('click', () => displayWeek(addWeeks(_currentWeek, 1)));
+document.getElementById('saveBtn').addEventListener('click', saveAll);
+document.getElementById('exportBtn').addEventListener('click', exportExcel);
+document.getElementById('saveRatesBtn').addEventListener('click', saveRates);
+document.getElementById('xlsxUpload').addEventListener('change', e => {
+  if (e.target.files[0]) { parseXlsxUpload(e.target.files[0]); e.target.value = ''; }
+});
+document.getElementById('ratesToggle').addEventListener('click', () => {
+  const panel = document.getElementById('ratesPanel');
+  const btn   = document.getElementById('ratesToggle');
+  const open  = panel.style.display === 'none';
+  panel.style.display = open ? 'block' : 'none';
+  btn.textContent = `⚙ 채널별 비율 설정 ${open ? '▴' : '▾'}`;
+});
+
+init();
+</script>
+</body>
+</html>
